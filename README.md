@@ -36,14 +36,14 @@ pip install -r requirements.txt
 
 ```bash
 source venv/bin/activate
-python toritalk.py
+python lstt.py
 ```
 
 Hold Ctrl+Super, speak, and release to transcribe.
 
 ## Configuration
 
-Edit constants in `toritalk.py`:
+Edit constants in `lstt.py`:
 
 ### Whisper model
 `WHISPER_MODEL` - Model size (downloads automatically on first run):

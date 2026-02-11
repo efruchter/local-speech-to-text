@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ToriTalk - Push-to-talk speech transcription for Linux/Wayland."""
+"""lstt - Push-to-talk speech transcription for Linux/Wayland."""
 
 import subprocess
 import sys
@@ -13,7 +13,7 @@ def notify(title: str, message: str = "", urgency: str = "normal"):
     """Send a desktop notification."""
     try:
         subprocess.run(
-            ["notify-send", "-u", urgency, "-a", "ToriTalk", title, message],
+            ["notify-send", "-u", urgency, "-a", "lstt", title, message],
             check=True,
             capture_output=True,
         )
@@ -78,10 +78,10 @@ class Transcriber:
 
     def __init__(self, model_name: str = WHISPER_MODEL):
         print(f"Loading Whisper model '{model_name}'...")
-        notify("ToriTalk", f"Loading model '{model_name}'... (may download ~3GB)")
+        notify("lstt", f"Loading model '{model_name}'... (may download ~3GB)")
         self.model = WhisperModel(model_name, device="cpu", compute_type="int8")
         print("Model loaded.")
-        notify("ToriTalk", "Model loaded. Ready!")
+        notify("lstt", "Model loaded. Ready!")
 
     def transcribe(self, audio: np.ndarray) -> str:
         """Transcribe audio array to text."""
@@ -197,7 +197,7 @@ class HotkeyMonitor:
             pass
 
 
-class ToriTalk:
+class Lstt:
     """Main application class."""
 
     def __init__(self):
@@ -245,7 +245,7 @@ class ToriTalk:
 
 
 def main():
-    app = ToriTalk()
+    app = Lstt()
     app.run()
 
 
