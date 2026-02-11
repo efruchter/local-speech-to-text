@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """lstt - Push-to-talk speech transcription for Linux/Wayland."""
 
+import signal
 import subprocess
 import sys
 import threading
@@ -9,9 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import evdev
+import gi
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+from gi.repository import Gdk, GLib, Gtk, GtkLayerShell
 
 
 def notify(title: str, message: str = "", urgency: str = "normal"):
@@ -139,6 +145,75 @@ class TextTyper:
             print("ydotool not found. Install with: sudo apt install ydotool")
 
 
+class RecordingIndicator:
+    """Floating overlay indicator using GTK Layer Shell."""
+
+    CSS = """
+    .indicator {
+        background-color: rgba(30, 30, 30, 0.9);
+        border-radius: 16px;
+        padding: 6px 14px;
+        color: white;
+        font-size: 14px;
+        font-weight: bold;
+    }
+    .indicator-recording {
+        color: #ff4444;
+    }
+    .indicator-transcribing {
+        color: #ffaa00;
+    }
+    """
+
+    def __init__(self):
+        # Load CSS
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(self.CSS.encode())
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+        self.window = Gtk.Window()
+        GtkLayerShell.init_for_window(self.window)
+        GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.OVERLAY)
+        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.TOP, True)
+        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.RIGHT, True)
+        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.TOP, 24)
+        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.RIGHT, 24)
+        GtkLayerShell.set_keyboard_mode(
+            self.window, GtkLayerShell.KeyboardMode.NONE
+        )
+
+        self.label = Gtk.Label()
+        self.label.get_style_context().add_class("indicator")
+        self.window.add(self.label)
+        self.window.show_all()
+        self.window.hide()
+
+    def show_recording(self):
+        GLib.idle_add(self._show_recording)
+
+    def _show_recording(self):
+        self.label.set_markup(
+            '<span color="#ff4444">●</span>  Recording...'
+        )
+        self.window.show_all()
+
+    def show_transcribing(self):
+        GLib.idle_add(self._show_transcribing)
+
+    def _show_transcribing(self):
+        self.label.set_markup(
+            '<span color="#ffaa00">⟳</span>  Transcribing...'
+        )
+        self.window.show_all()
+
+    def hide(self):
+        GLib.idle_add(self.window.hide)
+
+
 class HotkeyMonitor:
     """Monitors for Ctrl+Super hotkey using evdev."""
 
@@ -173,25 +248,16 @@ class HotkeyMonitor:
         if not self.devices:
             print("No keyboard devices found. Make sure you're in the 'input' group.")
             print("Run: sudo usermod -aG input $USER")
-            sys.exit(1)
+            GLib.idle_add(Gtk.main_quit)
+            return
 
         print(f"Monitoring {len(self.devices)} keyboard device(s)")
         print("Hold Ctrl+Super to record, release to transcribe.")
         print("Press Ctrl+C to exit.\n")
 
-        # Monitor all keyboards in separate threads
-        threads = []
         for device in self.devices:
             t = threading.Thread(target=self._monitor_device, args=(device,), daemon=True)
             t.start()
-            threads.append(t)
-
-        # Keep main thread alive
-        try:
-            for t in threads:
-                t.join()
-        except KeyboardInterrupt:
-            print("\nExiting...")
 
     def _monitor_device(self, device: evdev.InputDevice):
         """Monitor a single input device."""
@@ -229,6 +295,7 @@ class Lstt:
         self.recorder = AudioRecorder()
         self.transcriber = Transcriber()
         self.typer = TextTyper()
+        self.indicator = RecordingIndicator()
         self.history: deque[TranscriptionResult] = deque(maxlen=8)
         self.monitor = HotkeyMonitor(
             on_press=self._on_hotkey_press,
@@ -238,7 +305,7 @@ class Lstt:
     def _on_hotkey_press(self):
         """Called when Ctrl+Super is pressed."""
         print("Recording...", end="", flush=True)
-        notify("Recording...", "Release to transcribe")
+        self.indicator.show_recording()
         self.recorder.start()
 
     def _on_hotkey_release(self):
@@ -249,12 +316,15 @@ class Lstt:
 
         if duration < 0.3:
             print("Recording too short, skipping.")
+            self.indicator.hide()
             notify("Recording too short", "Skipped")
             return
 
         print("Transcribing...", end="", flush=True)
+        self.indicator.show_transcribing()
         result = self.transcriber.transcribe(audio, duration)
         print(f" done.")
+        self.indicator.hide()
 
         if result.text:
             self.history.append(result)
@@ -284,10 +354,14 @@ class Lstt:
 
     def run(self):
         """Run the application."""
-        self.monitor.run()
+        # Hotkey monitor runs in background threads
+        threading.Thread(target=self.monitor.run, daemon=True).start()
+        # GTK main loop on the main thread
+        Gtk.main()
 
 
 def main():
+    signal.signal(signal.SIGINT, lambda *_: Gtk.main_quit())
     app = Lstt()
     app.run()
 

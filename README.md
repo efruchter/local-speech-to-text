@@ -11,7 +11,7 @@ Push-to-talk speech transcription tool for Linux/Wayland.
 
 ### System dependencies
 ```bash
-sudo apt install ydotool libportaudio2
+sudo apt install ydotool libportaudio2 libgtk-layer-shell0 gir1.2-gtklayershell-0.1
 ```
 
 ### ydotool daemon
