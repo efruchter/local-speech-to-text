@@ -1,4 +1,4 @@
-# ToriTalk
+# lstt
 
 Push-to-talk speech transcription tool for Linux/Wayland.
 
