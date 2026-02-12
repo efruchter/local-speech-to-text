@@ -2,4 +2,3 @@ faster-whisper
 sounddevice
 evdev
 numpy
-PyGObject

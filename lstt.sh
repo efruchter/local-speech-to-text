@@ -4,7 +4,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ ! -d "$DIR/venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv "$DIR/venv"
+    python3 -m venv --system-site-packages "$DIR/venv"
     "$DIR/venv/bin/pip" install -q -r "$DIR/requirements.txt"
 fi
 
